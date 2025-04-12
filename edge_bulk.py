@@ -6,6 +6,7 @@ import time
 import uuid
 import io
 import zipfile
+import shutil
 from typing import Dict, List
 
 # Set page config for better appearance
@@ -69,9 +70,37 @@ hr {
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# Ensure outputs directory exists
+# Output directory configuration
 OUTPUTS_DIR = "outputs"
-os.makedirs(OUTPUTS_DIR, exist_ok=True)
+
+# Clean up and ensure output directory exists
+if not os.path.exists(OUTPUTS_DIR):
+    os.makedirs(OUTPUTS_DIR, exist_ok=True)
+
+# If "output" (default edge-tts directory) exists and is different from our OUTPUTS_DIR, warn the user
+if os.path.exists("output") and os.path.abspath("output") != os.path.abspath(OUTPUTS_DIR):
+    st.warning(f"Detected multiple output directories. Using '{OUTPUTS_DIR}' for all audio files.")
+    # Option to merge or delete the default directory
+    if st.button("Move files from 'output' to 'outputs' and delete 'output' directory"):
+        try:
+            # If output exists but is empty, just remove it
+            if os.path.exists("output") and not os.listdir("output"):
+                os.rmdir("output")
+                st.success("Removed empty 'output' directory")
+            # If it has files, move them
+            elif os.path.exists("output"):
+                # Create outputs dir if it doesn't exist
+                os.makedirs(OUTPUTS_DIR, exist_ok=True)
+                # Move files from output to outputs
+                for file in os.listdir("output"):
+                    source = os.path.join("output", file)
+                    destination = os.path.join(OUTPUTS_DIR, file)
+                    shutil.move(source, destination)
+                # Remove the now-empty output directory
+                os.rmdir("output")
+                st.success("Moved all files from 'output' to 'outputs' and removed 'output' directory")
+        except Exception as e:
+            st.error(f"Error cleaning up directories: {e}")
 
 def generate_audio(text, output_file, voice, rate="+0%", volume="+0%"):
     """Generate TTS audio (synchronous call)."""
@@ -270,6 +299,7 @@ with col2:
             progress_bar = st.progress(0)
             
             generated_files = []
+            any_generated = False
             
             for i, entry in enumerate(pending_entries):
                 with st.spinner(f"Generating entry #{st.session_state['text_entries'].index(entry)+1}..."):
@@ -293,6 +323,7 @@ with col2:
                         entry["audio_bytes"] = audio_bytes
                         
                         generated_files.append(output_file)
+                        any_generated = True
                         
                         # Update progress bar
                         progress_bar.progress((i + 1) / total_pending)
@@ -308,10 +339,18 @@ with col2:
                     for file in generated_files:
                         st.text(file)
             
-            # Set the flag that we've just completed bulk generation
-            st.session_state["bulk_generation_complete"] = True
-            # Force a rerun to make sure the download button appears
-            st.rerun()
+            # Only force a rerun if we actually generated files
+            if any_generated:
+                # Set the flag that we've just completed bulk generation
+                st.session_state["bulk_generation_complete"] = True
+                
+                # Create placeholder for download button that will be shown after rerun
+                st.markdown("### Preparing download options...")
+                st.info("The page will refresh to show download options...")
+                
+                # Force a rerun to make sure the download button appears
+                time.sleep(1)  # Short delay to ensure user sees the message
+                st.rerun()
         else:
             st.info("No pending entries to generate.")
             
