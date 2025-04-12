@@ -6,7 +6,6 @@ import time
 import uuid
 import io
 import zipfile
-import shutil
 from typing import Dict, List
 
 # Set page config for better appearance
@@ -73,34 +72,8 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # Output directory configuration
 OUTPUTS_DIR = "outputs"
 
-# Clean up and ensure output directory exists
-if not os.path.exists(OUTPUTS_DIR):
-    os.makedirs(OUTPUTS_DIR, exist_ok=True)
-
-# If "output" (default edge-tts directory) exists and is different from our OUTPUTS_DIR, warn the user
-if os.path.exists("output") and os.path.abspath("output") != os.path.abspath(OUTPUTS_DIR):
-    st.warning(f"Detected multiple output directories. Using '{OUTPUTS_DIR}' for all audio files.")
-    # Option to merge or delete the default directory
-    if st.button("Move files from 'output' to 'outputs' and delete 'output' directory"):
-        try:
-            # If output exists but is empty, just remove it
-            if os.path.exists("output") and not os.listdir("output"):
-                os.rmdir("output")
-                st.success("Removed empty 'output' directory")
-            # If it has files, move them
-            elif os.path.exists("output"):
-                # Create outputs dir if it doesn't exist
-                os.makedirs(OUTPUTS_DIR, exist_ok=True)
-                # Move files from output to outputs
-                for file in os.listdir("output"):
-                    source = os.path.join("output", file)
-                    destination = os.path.join(OUTPUTS_DIR, file)
-                    shutil.move(source, destination)
-                # Remove the now-empty output directory
-                os.rmdir("output")
-                st.success("Moved all files from 'output' to 'outputs' and removed 'output' directory")
-        except Exception as e:
-            st.error(f"Error cleaning up directories: {e}")
+# Ensure outputs directory exists
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
 def generate_audio(text, output_file, voice, rate="+0%", volume="+0%"):
     """Generate TTS audio (synchronous call)."""
@@ -176,10 +149,6 @@ if "text_entries" not in st.session_state:
 # Add an entry ID counter to ensure unique keys
 if "entry_counter" not in st.session_state:
     st.session_state["entry_counter"] = 0
-
-# Add a flag to track if bulk generation just completed
-if "bulk_generation_complete" not in st.session_state:
-    st.session_state["bulk_generation_complete"] = False
 
 # Simplified Voice Selection Tools - just a single dropdown to change all voices
 st.header("Voice Selection")
@@ -282,6 +251,105 @@ def generate_single_audio(entry_id):
                 st.error(f"Error generating audio: {e}")
             break
 
+# Function to generate all pending audio files and update UI
+def generate_all_pending():
+    pending_entries = [e for e in st.session_state["text_entries"] if not e["generated"]]
+    total_pending = len(pending_entries)
+    
+    if total_pending == 0:
+        st.info("No pending entries to generate.")
+        return
+    
+    # Create a placeholder for the progress bar
+    st.subheader("Generating all pending entries...")
+    progress_bar = st.progress(0)
+    
+    generated_files = []
+    
+    # Bulk generation process
+    for i, entry in enumerate(pending_entries):
+        # Display current progress
+        progress_text = st.empty()
+        progress_text.text(f"Generating entry #{st.session_state['text_entries'].index(entry)+1}...")
+        
+        # Get filename-safe text (first 20 chars)
+        safe_text = "".join([c if c.isalnum() else "_" for c in entry["text"][:20]])
+        
+        # Create a unique filename
+        filename = f"{safe_text}_{entry['id']}_{uuid.uuid4().hex[:8]}.mp3"
+        output_file = os.path.join(OUTPUTS_DIR, filename)
+        
+        try:
+            # Generate the audio
+            generate_audio(entry["text"], output_file, entry["voice"], rate, volume)
+            
+            # Read the generated file for in-browser playback
+            with open(output_file, "rb") as f:
+                audio_bytes = f.read()
+            
+            entry["generated"] = True
+            entry["output_file"] = filename
+            entry["audio_bytes"] = audio_bytes
+            
+            generated_files.append(output_file)
+            
+            # Update progress bar
+            progress_bar.progress((i + 1) / total_pending)
+            
+        except Exception as e:
+            st.error(f"Error generating audio for entry #{st.session_state['text_entries'].index(entry)+1}: {e}")
+    
+    st.success(f"All audio generated successfully! Files saved to {OUTPUTS_DIR}/")
+    
+    # Display the list of generated files
+    if generated_files:
+        with st.expander("Generated Files"):
+            for file in generated_files:
+                st.text(file)
+    
+    # Show a message to indicate generation has completed
+    st.subheader("⬇️ All files generated - scroll down to download ⬇️")
+    
+    # Display the download section immediately
+    display_download_section()
+
+# Function to display the download section
+def display_download_section():
+    generated_entries = [e for e in st.session_state["text_entries"] if e["generated"] and e["audio_bytes"]]
+    
+    if not generated_entries:
+        return
+    
+    st.header("Download All Generated Audio")
+    
+    # Create a dictionary of filenames and audio data
+    audio_files = {e["output_file"]: e["audio_bytes"] for e in generated_entries}
+    
+    # Create a zip file
+    zip_data = create_zip_file(audio_files)
+    
+    # Display download button for the zip
+    st.download_button(
+        label=f"📦 Download All ({len(generated_entries)}) Audio Files as ZIP",
+        data=zip_data,
+        file_name=f"edge_tts_audio_{time.strftime('%Y%m%d_%H%M%S')}.zip",
+        mime="application/zip",
+        use_container_width=True
+    )
+    
+    # Show a summary of what's in the zip
+    with st.expander("Details of included files"):
+        for i, entry in enumerate(generated_entries):
+            voice_info = next((v for v in all_voices if v["ShortName"] == entry["voice"]), None)
+            locale = voice_info["Locale"] if voice_info else "Unknown"
+            gender = voice_info["Gender"] if voice_info else "Unknown"
+            
+            st.markdown(f"**File {i+1}**: {entry['output_file']}")
+            st.markdown(f"- **Voice**: {entry['voice']} ({locale}, {gender})")
+            st.markdown(f"- **Text**: {entry['text'][:100]}..." if len(entry['text']) > 100 else f"- **Text**: {entry['text']}")
+            st.markdown(f"- **Saved to**: `{os.path.join(OUTPUTS_DIR, entry['output_file'])}`")
+            st.markdown("---")
+
 # Control buttons
 st.header("Text Entries")
 col1, col2 = st.columns([1, 3])
@@ -291,68 +359,7 @@ with col1:
 
 with col2:
     if st.button("🔄 Generate All Pending", type="primary", use_container_width=True):
-        pending_entries = [e for e in st.session_state["text_entries"] if not e["generated"]]
-        total_pending = len(pending_entries)
-        
-        if total_pending > 0:
-            st.subheader("Generating all pending entries...")
-            progress_bar = st.progress(0)
-            
-            generated_files = []
-            any_generated = False
-            
-            for i, entry in enumerate(pending_entries):
-                with st.spinner(f"Generating entry #{st.session_state['text_entries'].index(entry)+1}..."):
-                    # Get filename-safe text (first 20 chars)
-                    safe_text = "".join([c if c.isalnum() else "_" for c in entry["text"][:20]])
-                    
-                    # Create a unique filename
-                    filename = f"{safe_text}_{entry['id']}_{uuid.uuid4().hex[:8]}.mp3"
-                    output_file = os.path.join(OUTPUTS_DIR, filename)
-                    
-                    try:
-                        # Generate the audio
-                        generate_audio(entry["text"], output_file, entry["voice"], rate, volume)
-                        
-                        # Read the generated file for in-browser playback
-                        with open(output_file, "rb") as f:
-                            audio_bytes = f.read()
-                        
-                        entry["generated"] = True
-                        entry["output_file"] = filename
-                        entry["audio_bytes"] = audio_bytes
-                        
-                        generated_files.append(output_file)
-                        any_generated = True
-                        
-                        # Update progress bar
-                        progress_bar.progress((i + 1) / total_pending)
-                        
-                    except Exception as e:
-                        st.error(f"Error generating audio for entry #{st.session_state['text_entries'].index(entry)+1}: {e}")
-            
-            st.success(f"All audio generated successfully! Files saved to {OUTPUTS_DIR}/")
-            
-            # Display the list of generated files
-            if generated_files:
-                with st.expander("Generated Files"):
-                    for file in generated_files:
-                        st.text(file)
-            
-            # Only force a rerun if we actually generated files
-            if any_generated:
-                # Set the flag that we've just completed bulk generation
-                st.session_state["bulk_generation_complete"] = True
-                
-                # Create placeholder for download button that will be shown after rerun
-                st.markdown("### Preparing download options...")
-                st.info("The page will refresh to show download options...")
-                
-                # Force a rerun to make sure the download button appears
-                time.sleep(1)  # Short delay to ensure user sees the message
-                st.rerun()
-        else:
-            st.info("No pending entries to generate.")
+        generate_all_pending()
             
 # If there are no entries yet, add one automatically
 if not st.session_state["text_entries"]:
@@ -422,44 +429,8 @@ for i, entry in enumerate(st.session_state["text_entries"]):
         
         st.divider()
 
-# Add a "Download All" button if there are generated audio files
-generated_entries = [e for e in st.session_state["text_entries"] if e["generated"] and e["audio_bytes"]]
-if generated_entries:
-    # If we just completed bulk generation, highlight the download section
-    if st.session_state["bulk_generation_complete"]:
-        st.header("⬇️ Download All Generated Audio ⬇️")
-        # Reset the flag after displaying
-        st.session_state["bulk_generation_complete"] = False
-    else:
-        st.header("Download All Generated Audio")
-    
-    # Create a dictionary of filenames and audio data
-    audio_files = {e["output_file"]: e["audio_bytes"] for e in generated_entries}
-    
-    # Create a zip file
-    zip_data = create_zip_file(audio_files)
-    
-    # Display download button for the zip
-    st.download_button(
-        label=f"📦 Download All ({len(generated_entries)}) Audio Files as ZIP",
-        data=zip_data,
-        file_name=f"edge_tts_audio_{time.strftime('%Y%m%d_%H%M%S')}.zip",
-        mime="application/zip",
-        use_container_width=True
-    )
-    
-    # Show a summary of what's in the zip
-    with st.expander("Details of included files"):
-        for i, entry in enumerate(generated_entries):
-            voice_info = next((v for v in all_voices if v["ShortName"] == entry["voice"]), None)
-            locale = voice_info["Locale"] if voice_info else "Unknown"
-            gender = voice_info["Gender"] if voice_info else "Unknown"
-            
-            st.markdown(f"**File {i+1}**: {entry['output_file']}")
-            st.markdown(f"- **Voice**: {entry['voice']} ({locale}, {gender})")
-            st.markdown(f"- **Text**: {entry['text'][:100]}..." if len(entry['text']) > 100 else f"- **Text**: {entry['text']}")
-            st.markdown(f"- **Saved to**: `{os.path.join(OUTPUTS_DIR, entry['output_file'])}`")
-            st.markdown("---")
+# Display download section at the bottom of the page
+display_download_section()
 
 # Footer
 st.markdown("---")
