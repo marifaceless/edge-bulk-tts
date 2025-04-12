@@ -69,6 +69,10 @@ hr {
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
+# Ensure outputs directory exists
+OUTPUTS_DIR = "outputs"
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
+
 def generate_audio(text, output_file, voice, rate="+0%", volume="+0%"):
     """Generate TTS audio (synchronous call)."""
     async def _generate():
@@ -123,6 +127,7 @@ with st.expander("ℹ️ How to use this app", expanded=False):
     ### Tips
     - Adjust rate and volume for all entries using the controls below
     - You can preview audio directly in the browser before downloading
+    - All generated files are saved automatically to the `/outputs` directory
     """)
 
 # Cache voices in session state so we don't fetch them repeatedly
@@ -220,23 +225,26 @@ def update_voice(entry_id, voice):
 def generate_single_audio(entry_id):
     for entry in st.session_state["text_entries"]:
         if entry["id"] == entry_id and not entry["generated"]:
+            # Get filename-safe text (first 20 chars)
+            safe_text = "".join([c if c.isalnum() else "_" for c in entry["text"][:20]])
+            
             # Create a unique filename
-            output_file = f"audio_{entry_id}_{uuid.uuid4().hex[:8]}.mp3"
+            filename = f"{safe_text}_{entry_id}_{uuid.uuid4().hex[:8]}.mp3"
+            output_file = os.path.join(OUTPUTS_DIR, filename)
+            
             try:
+                # Generate the audio
                 generate_audio(entry["text"], output_file, entry["voice"], rate, volume)
-                # Read the generated file
+                
+                # Read the generated file for in-browser playback
                 with open(output_file, "rb") as f:
                     audio_bytes = f.read()
                 
-                # Clean up the file from server as we've stored it in memory
-                try:
-                    os.remove(output_file)
-                except:
-                    pass
-                
                 entry["generated"] = True
-                entry["output_file"] = output_file
+                entry["output_file"] = filename
                 entry["audio_bytes"] = audio_bytes
+                
+                st.success(f"Audio saved to {output_file}")
             except Exception as e:
                 st.error(f"Error generating audio: {e}")
             break
@@ -257,28 +265,30 @@ with col2:
             st.subheader("Generating all pending entries...")
             progress_bar = st.progress(0)
             
+            generated_files = []
+            
             for i, entry in enumerate(pending_entries):
                 with st.spinner(f"Generating entry #{st.session_state['text_entries'].index(entry)+1}..."):
+                    # Get filename-safe text (first 20 chars)
+                    safe_text = "".join([c if c.isalnum() else "_" for c in entry["text"][:20]])
+                    
                     # Create a unique filename
-                    output_file = f"audio_{entry['id']}_{uuid.uuid4().hex[:8]}.mp3"
+                    filename = f"{safe_text}_{entry['id']}_{uuid.uuid4().hex[:8]}.mp3"
+                    output_file = os.path.join(OUTPUTS_DIR, filename)
                     
                     try:
                         # Generate the audio
                         generate_audio(entry["text"], output_file, entry["voice"], rate, volume)
                         
-                        # Read the generated file
+                        # Read the generated file for in-browser playback
                         with open(output_file, "rb") as f:
                             audio_bytes = f.read()
                         
-                        # Clean up the file
-                        try:
-                            os.remove(output_file)
-                        except:
-                            pass
-                        
                         entry["generated"] = True
-                        entry["output_file"] = output_file
+                        entry["output_file"] = filename
                         entry["audio_bytes"] = audio_bytes
+                        
+                        generated_files.append(output_file)
                         
                         # Update progress bar
                         progress_bar.progress((i + 1) / total_pending)
@@ -286,7 +296,13 @@ with col2:
                     except Exception as e:
                         st.error(f"Error generating audio for entry #{st.session_state['text_entries'].index(entry)+1}: {e}")
             
-            st.success("All audio generated successfully!")
+            st.success(f"All audio generated successfully! Files saved to {OUTPUTS_DIR}/")
+            
+            # Display the list of generated files
+            if generated_files:
+                with st.expander("Generated Files"):
+                    for file in generated_files:
+                        st.text(file)
         else:
             st.info("No pending entries to generate.")
             
@@ -354,6 +370,7 @@ for i, entry in enumerate(st.session_state["text_entries"]):
                     mime="audio/mp3",
                     use_container_width=True
                 )
+                st.markdown(f"📁 Saved to: `{os.path.join(OUTPUTS_DIR, entry['output_file'])}`")
         
         st.divider()
 
@@ -387,6 +404,7 @@ if generated_entries:
             st.markdown(f"**File {i+1}**: {entry['output_file']}")
             st.markdown(f"- **Voice**: {entry['voice']} ({locale}, {gender})")
             st.markdown(f"- **Text**: {entry['text'][:100]}..." if len(entry['text']) > 100 else f"- **Text**: {entry['text']}")
+            st.markdown(f"- **Saved to**: `{os.path.join(OUTPUTS_DIR, entry['output_file'])}`")
             st.markdown("---")
 
 # Footer
