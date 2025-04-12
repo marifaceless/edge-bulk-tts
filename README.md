@@ -19,13 +19,35 @@ A powerful text-to-speech application using Microsoft Edge voices with a beautif
 2. Double-click `install_windows.bat`
 3. The app will install and start automatically
 
-**Mac Users:**
-1. Extract the downloaded ZIP file
-2. Open Terminal 
-3. Type `chmod +x ` (with a space at the end)
-4. Drag the `install_mac.command` file into Terminal
-5. Press Enter
-6. Now double-click `install_mac.command` to install and run
+**Mac Users (Detailed Instructions):**
+
+> **First Time Setup** (Only needed once)
+
+1. **Download & Extract**
+   - After downloading, find the ZIP file in your Downloads folder
+   - Double-click to extract it
+   - Open the extracted folder
+
+2. **Make the installer executable** (this is required for security reasons)
+   - Press Command+Space to open Spotlight
+   - Type "Terminal" and press Enter
+   - When Terminal opens, type exactly: `chmod +x ` (including the space at the end)
+   - Find the extracted folder in Finder
+   - Drag the file named `install_mac.command` from Finder into the Terminal window
+   - Your Terminal should now show something like: `chmod +x /Users/yourname/Downloads/edge-bulk-tts-main/install_mac.command`
+   - Press Enter
+
+3. **Run the installer**
+   - Go back to the extracted folder in Finder
+   - Double-click the `install_mac.command` file
+   - If you see a security warning, right-click (or Control+click) on the file instead and select "Open"
+   - Click "Open" if prompted again
+   - The Terminal will open and set up everything automatically
+   - Wait for the installation to complete and the app to start in your web browser
+
+> **Future Use** (After first-time setup)
+>
+> Just double-click the `install_mac.command` file whenever you want to use the app again!
 
 ## ✨ Features
 
@@ -51,9 +73,10 @@ A powerful text-to-speech application using Microsoft Edge voices with a beautif
 - **App won't start**: Check that you have internet access for voice retrieval
 
 ### Mac Issues:
-- **"Cannot be opened"**: Right-click the .command file → Open → Open
-- **"Permission denied"**: Run `chmod +x install_mac.command` in Terminal
+- **"Cannot be opened"**: Right-click the file → select "Open" → click "Open" again when prompted
+- **"Permission denied"**: Follow the detailed steps above for making the file executable
 - **Python not found**: Install Python from [python.org](https://www.python.org/downloads/)
+- **Terminal says "Operation not permitted"**: Go to System Preferences → Security & Privacy → Privacy → Full Disk Access → add Terminal
 
 ## 💻 System Requirements
 
