@@ -65,15 +65,53 @@ hr {
     margin-bottom: 0.5rem;
     width: 100%;
 }
+
+/* Add a pulsing animation for the generating indicator */
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+.generating-indicator {
+  animation: pulse 1.5s infinite;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #f0f2f6;
+  display: inline-block;
+  margin-bottom: 10px;
+}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-def generate_audio(text, output_file, voice, rate="+0%", volume="+0%"):
-    """Generate TTS audio (synchronous call)."""
+def generate_audio(text, output_file, voice, rate="+0%", volume="+0%", progress_callback=None):
+    """Generate TTS audio (synchronous call) with progress reporting."""
     async def _generate():
-        communicate = edge_tts.Communicate(text, voice=voice, rate=rate, volume=volume)
-        await communicate.save(output_file)
+        # Break the text into chunks to show progress
+        total_length = len(text)
+        
+        if progress_callback and total_length > 100:
+            # Signal start of processing
+            progress_callback(0.1)
+            
+            # Simulate some initial processing time
+            await asyncio.sleep(0.5)
+            progress_callback(0.2)
+            
+            # Generate the audio
+            communicate = edge_tts.Communicate(text, voice=voice, rate=rate, volume=volume)
+            await communicate.save(output_file)
+            
+            # Simulate finalizing
+            await asyncio.sleep(0.3)
+            progress_callback(0.9)
+            await asyncio.sleep(0.2)
+            progress_callback(1.0)
+        else:
+            # For short text, just generate without progress
+            communicate = edge_tts.Communicate(text, voice=voice, rate=rate, volume=volume)
+            await communicate.save(output_file)
+            
     asyncio.run(_generate())
 
 async def get_voices():
@@ -185,7 +223,9 @@ def add_text_entry():
         "voice": voice_names[default_index],
         "generated": False,
         "output_file": None,
-        "audio_bytes": None
+        "audio_bytes": None,
+        "generating": False,
+        "progress": 0
     })
 
 # Function to remove a text entry
@@ -204,6 +244,8 @@ def update_text(entry_id, text):
             entry["generated"] = False
             entry["output_file"] = None
             entry["audio_bytes"] = None
+            entry["generating"] = False
+            entry["progress"] = 0
             break
 
 # Function to update voice for an entry
@@ -215,16 +257,46 @@ def update_voice(entry_id, voice):
             entry["generated"] = False
             entry["output_file"] = None
             entry["audio_bytes"] = None
+            entry["generating"] = False
+            entry["progress"] = 0
             break
+
+# Function to update progress for an entry
+def update_progress(entry_id, progress):
+    for entry in st.session_state["text_entries"]:
+        if entry["id"] == entry_id:
+            entry["progress"] = progress
+            if progress >= 1.0:
+                entry["generating"] = False
+            break
+    # Force a rerun to update the UI
+    st.experimental_rerun()
 
 # Function to generate audio for a single entry
 def generate_single_audio(entry_id):
     for entry in st.session_state["text_entries"]:
         if entry["id"] == entry_id and not entry["generated"]:
+            # Mark as generating (to show status indicator)
+            entry["generating"] = True
+            entry["progress"] = 0
+            
+            # Force UI update to show "Generating..." indicator
+            st.experimental_rerun()
+            
             # Create a unique filename
             output_file = f"audio_{entry_id}_{uuid.uuid4().hex[:8]}.mp3"
+            
             try:
-                generate_audio(entry["text"], output_file, entry["voice"], rate, volume)
+                # Use a callback to update progress
+                def progress_callback(progress):
+                    entry["progress"] = progress
+                
+                # Generate the audio
+                generate_audio(entry["text"], output_file, entry["voice"], rate, volume, progress_callback)
+                
+                # Add a slight delay to ensure the progress is visible
+                time.sleep(0.5)
+                
                 # Read the generated file
                 with open(output_file, "rb") as f:
                     audio_bytes = f.read()
@@ -236,9 +308,14 @@ def generate_single_audio(entry_id):
                     pass
                 
                 entry["generated"] = True
+                entry["generating"] = False
+                entry["progress"] = 1.0
                 entry["output_file"] = output_file
                 entry["audio_bytes"] = audio_bytes
+                
             except Exception as e:
+                entry["generating"] = False
+                entry["progress"] = 0
                 st.error(f"Error generating audio: {e}")
             break
 
@@ -258,10 +335,58 @@ with col2:
             st.subheader("Generating all pending entries...")
             progress_bar = st.progress(0)
             
+            # Mark all as generating
+            for entry in pending_entries:
+                entry["generating"] = True
+                entry["progress"] = 0
+            
+            # Force UI update
+            st.experimental_rerun()
+            
+            # Now generate each one
             for i, entry in enumerate(pending_entries):
-                with st.spinner(f"Generating entry #{st.session_state['text_entries'].index(entry)+1}..."):
-                    generate_single_audio(entry["id"])
-                    progress_bar.progress(int((i + 1) / total_pending * 100))
+                # Create a placeholder for this entry's progress
+                st.write(f"Generating entry #{st.session_state['text_entries'].index(entry)+1}...")
+                entry_progress = st.progress(0)
+                
+                # Create a unique filename
+                output_file = f"audio_{entry['id']}_{uuid.uuid4().hex[:8]}.mp3"
+                
+                try:
+                    # Define a progress callback
+                    def progress_callback(progress):
+                        entry["progress"] = progress
+                        entry_progress.progress(progress)
+                    
+                    # Generate the audio
+                    generate_audio(entry["text"], output_file, entry["voice"], rate, volume, progress_callback)
+                    
+                    # Read the generated file
+                    with open(output_file, "rb") as f:
+                        audio_bytes = f.read()
+                    
+                    # Clean up the file
+                    try:
+                        os.remove(output_file)
+                    except:
+                        pass
+                    
+                    entry["generated"] = True
+                    entry["generating"] = False
+                    entry["progress"] = 1.0
+                    entry["output_file"] = output_file
+                    entry["audio_bytes"] = audio_bytes
+                    
+                    # Update overall progress
+                    progress_bar.progress(int((i + 1) / total_pending * 100) / 100)
+                    
+                    # Add a slight delay to make progress visible
+                    time.sleep(0.5)
+                    
+                except Exception as e:
+                    entry["generating"] = False
+                    entry["progress"] = 0
+                    st.error(f"Error generating audio for entry #{st.session_state['text_entries'].index(entry)+1}: {e}")
             
             st.success("All audio generated successfully!")
         else:
@@ -307,9 +432,17 @@ for i, entry in enumerate(st.session_state["text_entries"]):
             update_voice(entry["id"], selected_voice)
             
             # Generate button for this entry
-            if st.button("🔊 Generate", key=f"gen_{entry['id']}", use_container_width=True):
-                with st.spinner(f"Generating audio for entry #{i+1}..."):
+            if not entry["generating"] and not entry["generated"]:
+                if st.button("🔊 Generate", key=f"gen_{entry['id']}", use_container_width=True):
                     generate_single_audio(entry["id"])
+            elif entry["generating"]:
+                # Show generating status with a progress indicator
+                st.markdown(f"""
+                <div class="generating-indicator">⏳ Generating... {int(entry["progress"]*100)}%</div>
+                """, unsafe_allow_html=True)
+                
+                # Show progress bar
+                st.progress(entry["progress"])
             
             if st.button("🗑️ Remove", key=f"remove_{entry['id']}", use_container_width=True):
                 remove_text_entry(entry["id"])
