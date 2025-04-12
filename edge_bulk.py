@@ -270,7 +270,7 @@ def update_progress(entry_id, progress):
                 entry["generating"] = False
             break
     # Force a rerun to update the UI
-    st.experimental_rerun()
+    st.rerun()
 
 # Function to generate audio for a single entry
 def generate_single_audio(entry_id):
@@ -281,7 +281,7 @@ def generate_single_audio(entry_id):
             entry["progress"] = 0
             
             # Force UI update to show "Generating..." indicator
-            st.experimental_rerun()
+            st.rerun()
             
             # Create a unique filename
             output_file = f"audio_{entry_id}_{uuid.uuid4().hex[:8]}.mp3"
@@ -341,7 +341,7 @@ with col2:
                 entry["progress"] = 0
             
             # Force UI update
-            st.experimental_rerun()
+            st.rerun()
             
             # Now generate each one
             for i, entry in enumerate(pending_entries):
