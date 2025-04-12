@@ -37,13 +37,20 @@ A powerful text-to-speech application using Microsoft Edge voices with a beautif
    - Your Terminal should now show something like: `chmod +x /Users/yourname/Downloads/edge-bulk-tts-main/install_mac.command`
    - Press Enter
 
-3. **Run the installer**
-   - Go back to the extracted folder in Finder
-   - Double-click the `install_mac.command` file
-   - If you see a security warning, right-click (or Control+click) on the file instead and select "Open"
-   - Click "Open" if prompted again
-   - The Terminal will open and set up everything automatically
-   - Wait for the installation to complete and the app to start in your web browser
+3. **Allow the app in Security Settings** (required on macOS)
+   - Try to double-click the `install_mac.command` file - you'll likely get a security warning
+   - Go to Apple menu (top left) → System Settings/Preferences → Security & Privacy → General
+   - Look for a message about "install_mac.command" being blocked
+   - Click "Open Anyway" or "Allow" (you may need to click the lock icon and enter your password first)
+   - Go back to Finder and double-click the file again
+   - If prompted again, click "Open"
+
+4. **If you still get an error about edge_tts**
+   - Open Terminal
+   - Navigate to the folder: `cd /path/to/edge-bulk-tts-main` (or drag the folder into Terminal)
+   - Run: `source venv/bin/activate`
+   - Run: `pip install edge-tts==6.1.9`
+   - Then run: `streamlit run edge_bulk.py`
 
 > **Future Use** (After first-time setup)
 >
@@ -73,8 +80,9 @@ A powerful text-to-speech application using Microsoft Edge voices with a beautif
 - **App won't start**: Check that you have internet access for voice retrieval
 
 ### Mac Issues:
-- **"Cannot be opened"**: Right-click the file → select "Open" → click "Open" again when prompted
+- **"Cannot be opened"**: Follow step 3 in the Mac installation instructions to allow it in Security settings
 - **"Permission denied"**: Follow the detailed steps above for making the file executable
+- **"No module named edge_tts"**: Follow step 4 in Mac installation instructions to install it manually
 - **Python not found**: Install Python from [python.org](https://www.python.org/downloads/)
 - **Terminal says "Operation not permitted"**: Go to System Preferences → Security & Privacy → Privacy → Full Disk Access → add Terminal
 
