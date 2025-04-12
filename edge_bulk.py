@@ -148,6 +148,10 @@ if "text_entries" not in st.session_state:
 if "entry_counter" not in st.session_state:
     st.session_state["entry_counter"] = 0
 
+# Add a flag to track if bulk generation just completed
+if "bulk_generation_complete" not in st.session_state:
+    st.session_state["bulk_generation_complete"] = False
+
 # Simplified Voice Selection Tools - just a single dropdown to change all voices
 st.header("Voice Selection")
 
@@ -303,6 +307,11 @@ with col2:
                 with st.expander("Generated Files"):
                     for file in generated_files:
                         st.text(file)
+            
+            # Set the flag that we've just completed bulk generation
+            st.session_state["bulk_generation_complete"] = True
+            # Force a rerun to make sure the download button appears
+            st.rerun()
         else:
             st.info("No pending entries to generate.")
             
@@ -377,7 +386,13 @@ for i, entry in enumerate(st.session_state["text_entries"]):
 # Add a "Download All" button if there are generated audio files
 generated_entries = [e for e in st.session_state["text_entries"] if e["generated"] and e["audio_bytes"]]
 if generated_entries:
-    st.header("Download All Generated Audio")
+    # If we just completed bulk generation, highlight the download section
+    if st.session_state["bulk_generation_complete"]:
+        st.header("⬇️ Download All Generated Audio ⬇️")
+        # Reset the flag after displaying
+        st.session_state["bulk_generation_complete"] = False
+    else:
+        st.header("Download All Generated Audio")
     
     # Create a dictionary of filenames and audio data
     audio_files = {e["output_file"]: e["audio_bytes"] for e in generated_entries}
