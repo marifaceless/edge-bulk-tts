@@ -5,7 +5,7 @@ A powerful text-to-speech application using Microsoft Edge voices with a beautif
 ## 📥 Download & Installation
 
 ### Option 1: Use Online (No Installation)
-👉 **[CLICK HERE TO USE THE APP ONLINE](https://marifaceless-edge-bulk-tts-z44cejclbqsxsktptwjhrt.streamlit.app)** - No installation required!
+👉 **[CLICK HERE TO USE THE APP ONLINE](https://edge-tts-bulk-demo.streamlit.app)** - No installation required!
 
 ### Option 2: Install on Your Computer
 
@@ -38,8 +38,8 @@ A powerful text-to-speech application using Microsoft Edge voices with a beautif
    - Press Enter
 
 3. **Allow the app in Security Settings** (required on macOS)
-   - Try to double-click the `install_mac.command` file - you'll likely get a security warning
-   - Go to Apple menu (top left) → System Settings/Preferences → Security & Privacy → General
+   - Double-click the `install_mac.command` file - you'll get a security warning
+   - After seeing the warning, go to Apple menu (top left) → System Settings/Preferences → Security & Privacy → General
    - Look for a message about "install_mac.command" being blocked
    - Click "Open Anyway" or "Allow" (you may need to click the lock icon and enter your password first)
    - Go back to Finder and double-click the file again
